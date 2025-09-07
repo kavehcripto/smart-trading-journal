@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: Smart Trading Journal
+    runtime: python
+    env: production
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT
+    envVars:
+      - key: PORT
+        value: 10000
