@@ -5,10 +5,16 @@ import json
 from datetime import datetime
 import arabic_reshaper
 from bidi.algorithm import get_display
+import plotly.express as px
+import pandas as pd
 
 # --- session_state ---
 if 'pre_trade_data' not in st.session_state:
     st.session_state.pre_trade_data = {}
+if 'entry_conditions' not in st.session_state:
+    st.session_state.entry_conditions = [{"condition": "", "required": True}]
+if 'exit_conditions' not in st.session_state:
+    st.session_state.exit_conditions = [{"condition": "", "required": True}]
 
 # --- پشتیبانی از فارسی ---
 def fa(text):
@@ -695,113 +701,94 @@ elif menu == t("Define Strategy"):
     else:
         st.subheader("➕ Define a New Strategy")
 
-    # --- لیست استراتژی‌ها ---
-    strategy_names = [s['name'] for s in strategies]
-    action = st.radio(t("Action"), [t("Create New Strategy"), t("Edit Existing Strategy")])
+    name = st.text_input(t("Strategy Name"))
+    desc = st.text_area(t("Description"))
 
-    if action == t("Create New Strategy"):
-        name = st.text_input(t("Strategy Name"))
-        desc = st.text_area(t("Description"))
-
-        st.markdown("---")
-        if language == "فارسی":
-            st.markdown(html_rtl("### 🔽 قوانین ورود"), unsafe_allow_html=True)
-        else:
-            st.write("### 🔽 Entry Rules")
-
-        entry_rules = []
-        for i in range(5):
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                condition = st.text_input(t("Condition"), key=f"new_entry_cond_{i}")
-            with col2:
-                req = st.checkbox(t("Required"), value=True, key=f"new_entry_req_{i}")
-            if condition:
-                entry_rules.append({"condition": condition, "required": req})
-
-        st.markdown("---")
-        if language == "فارسی":
-            st.markdown(html_rtl("### 🔼 قوانین خروج"), unsafe_allow_html=True)
-        else:
-            st.write("### 🔼 Exit Rules")
-
-        exit_rules = []
-        for i in range(5):
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                condition = st.text_input(t("Condition"), key=f"new_exit_cond_{i}")
-            with col2:
-                req = st.checkbox(t("Required"), value=True, key=f"new_exit_req_{i}")
-            if condition:
-                exit_rules.append({"condition": condition, "required": req})
-
-        if st.button(t("Save Strategy")):
-            if not name or not entry_rules:
-                st.error(t("Please fill in required fields."))
-            elif name in strategy_names:
-                st.error(t("This strategy name already exists."))
-            else:
-                strategy_data = {
-                    "name": name,
-                    "description": desc,
-                    "entry_rules": entry_rules,
-                    "exit_rules": exit_rules
-                }
-                success = save_strategy(conn, strategy_data)
-                if success:
-                    st.success(t("Strategy saved successfully!"))
-                    st.experimental_rerun()
-                else:
-                    st.error(t("This strategy name already exists."))
-
+    st.markdown("---")
+    
+    # --- ورود ---
+    if language == "فارسی":
+        st.markdown(html_rtl("### 🔽 قوانین ورود"), unsafe_allow_html=True)
     else:
-        selected_name = st.selectbox(t("Select Strategy"), strategy_names)
-        selected_strategy = next((s for s in strategies if s['name'] == selected_name), None)
-        if selected_strategy:
-            with st.form("edit_strategy"):
-                name = st.text_input(t("Strategy Name"), value=selected_strategy['name'])
-                desc = st.text_area(t("Description"), value=selected_strategy['description'])
+        st.write("### 🔽 Entry Rules")
 
-                st.markdown("---")
-                if language == "فارسی":
-                    st.markdown(html_rtl("### 🔽 قوانین ورود"), unsafe_allow_html=True)
-                else:
-                    st.write("### 🔽 Entry Rules")
+    for i, cond in enumerate(st.session_state.entry_conditions):
+        col1, col2, col3 = st.columns([3, 2, 1])
+        with col1:
+            st.session_state.entry_conditions[i]['condition'] = st.text_input(
+                t("Condition"), 
+                value=cond['condition'], 
+                key=f"entry_cond_{i}"
+            )
+        with col2:
+            st.session_state.entry_conditions[i]['required'] = st.checkbox(
+                t("Required"), 
+                value=cond['required'], 
+                key=f"entry_req_{i}"
+            )
+        with col3:
+            if st.button("🗑️", key=f"del_entry_{i}"):
+                st.session_state.entry_conditions.pop(i)
+                st.experimental_rerun()
 
-                for i, rule in enumerate(selected_strategy['entry_rules']):
-                    col1, col2 = st.columns([3, 2])
-                    with col1:
-                        condition = st.text_input(t("Condition"), value=rule['condition'], key=f"edit_entry_{i}")
-                    with col2:
-                        req = st.checkbox(t("Required"), value=rule['required'], key=f"edit_req_{i}")
+    if st.button("➕ Add Entry Condition"):
+        st.session_state.entry_conditions.append({"condition": "", "required": True})
+        st.experimental_rerun()
 
-                st.markdown("---")
-                if language == "فارسی":
-                    st.markdown(html_rtl("### 🔼 قوانین خروج"), unsafe_allow_html=True)
-                else:
-                    st.write("### 🔼 Exit Rules")
+    st.markdown("---")
+    
+    # --- خروج ---
+    if language == "فارسی":
+        st.markdown(html_rtl("### 🔼 قوانین خروج"), unsafe_allow_html=True)
+    else:
+        st.write("### 🔼 Exit Rules")
 
-                for i, rule in enumerate(selected_strategy['exit_rules']):
-                    col1, col2 = st.columns([3, 2])
-                    with col1:
-                        condition = st.text_input(t("Condition"), value=rule['condition'], key=f"edit_exit_{i}")
-                    with col2:
-                        req = st.checkbox(t("Required"), value=rule['required'], key=f"edit_exit_req_{i}")
+    for i, cond in enumerate(st.session_state.exit_conditions):
+        col1, col2, col3 = st.columns([3, 2, 1])
+        with col1:
+            st.session_state.exit_conditions[i]['condition'] = st.text_input(
+                t("Condition"), 
+                value=cond['condition'], 
+                key=f"exit_cond_{i}"
+            )
+        with col2:
+            st.session_state.exit_conditions[i]['required'] = st.checkbox(
+                t("Required"), 
+                value=cond['required'], 
+                key=f"exit_req_{i}"
+            )
+        with col3:
+            if st.button("🗑️", key=f"del_exit_{i}"):
+                st.session_state.exit_conditions.pop(i)
+                st.experimental_rerun()
 
-                submitted = st.form_submit_button(t("Update Strategy"))
-                if submitted:
-                    if not name:
-                        st.error(t("Please fill in required fields."))
-                    elif name != selected_strategy['name'] and name in strategy_names:
-                        st.error(t("This strategy name already exists."))
-                    else:
-                        selected_strategy['name'] = name
-                        selected_strategy['description'] = desc
-                        selected_strategy['entry_rules'] = [{"condition": st.session_state[f"edit_entry_{i}"], "required": st.session_state[f"edit_req_{i}"]} for i in range(len(selected_strategy['entry_rules']))]
-                        selected_strategy['exit_rules'] = [{"condition": st.session_state[f"edit_exit_{i}"], "required": st.session_state[f"edit_exit_req_{i}"]} for i in range(len(selected_strategy['exit_rules']))]
-                        save_strategy(conn, selected_strategy)
-                        st.success(t("Strategy updated successfully!"))
-                        st.experimental_rerun()
+    if st.button("➕ Add Exit Condition"):
+        st.session_state.exit_conditions.append({"condition": "", "required": True})
+        st.experimental_rerun()
+
+    if st.button(t("Save Strategy")):
+        entry_rules = [c for c in st.session_state.entry_conditions if c['condition'].strip()]
+        exit_rules = [c for c in st.session_state.exit_conditions if c['condition'].strip()]
+        
+        if not name or not entry_rules:
+            st.error(t("Please fill in required fields."))
+        elif name in [s['name'] for s in strategies]:
+            st.error(t("This strategy name already exists."))
+        else:
+            strategy_data = {
+                "name": name,
+                "description": desc,
+                "entry_rules": entry_rules,
+                "exit_rules": exit_rules
+            }
+            success = save_strategy(conn, strategy_data)
+            if success:
+                st.success(t("Strategy saved successfully!"))
+                st.session_state.entry_conditions = [{"condition": "", "required": True}]
+                st.session_state.exit_conditions = [{"condition": "", "required": True}]
+                st.experimental_rerun()
+            else:
+                st.error(t("This strategy name already exists."))
 
 # ================================
 # ۴. گزارش هوشمند
@@ -883,6 +870,28 @@ elif menu == t("Smart Report"):
                         st.success("✅ High-quality strategy")
                     elif perf['avg_rr'] < 0.5:
                         st.warning("⚠️ Needs improvement")
+
+        # --- نمودار PnL Over Time ---
+        if len(trades) > 1:
+            st.markdown("### 📈 PnL Over Time")
+            df = pd.DataFrame(trades)
+            df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+            fig = px.line(df, x='trade_date', y='profit_or_loss', 
+                         title='Daily PnL Trend')
+            st.plotly_chart(fig, use_container_width=True)
+
+        # --- نمودار Win/Loss ---
+        wins = [t for t in trades if t['profit_or_loss'] > 0]
+        losses = [t for t in trades if t['profit_or_loss'] <= 0]
+        st.markdown("### 🎯 Win vs Loss")
+        fig2 = px.pie(
+            names=[t("Wins"), t("Losses")], 
+            values=[len(wins), len(losses)],
+            hole=0.4,
+            title=f"Win Rate: {len(wins)/len(trades):.1%}",
+            color_discrete_sequence=["#2CA02C", "#D62728"]
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
         # --- تشخیص تغییر استراتژی ---
         if strategy_change and strategy_change['changed']:
